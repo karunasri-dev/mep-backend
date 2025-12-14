@@ -9,6 +9,9 @@ import cookieParser from "cookie-parser";
 // routes
 import userRoutes from "./routes/auth.routes.js";
 import eventRoutes from "./routes/event.routes.js";
+import teamRoutes from "./routes/team.routes.js";
+
+// global error handler
 
 import { globalErrorHandler } from "./middleware/error.middleware.js";
 
@@ -30,6 +33,7 @@ app.use(cookieParser());
 // routes
 app.use("/api/auth", userRoutes);
 app.use("/api/events", eventRoutes);
+app.use("/api/teams", teamRoutes);
 
 // global error handler - must be after routes
 app.use(globalErrorHandler);
