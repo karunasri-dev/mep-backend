@@ -1,14 +1,26 @@
-// controllers/event.controller.js
 import Event from "../models/Event.model.js";
 
+/**
+ * CREATE EVENT (ADMIN)
+ */
 export const createEvent = async (req, res, next) => {
   try {
-    const { eventName, eventPlace, timings } = req.body;
+    const { title, description, location, timings, prizeMoney } = req.body;
+
+    if (!title || !location || !timings || prizeMoney === undefined) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Missing required fields",
+      });
+    }
 
     const event = await Event.create({
-      eventName,
-      eventPlace,
+      title,
+      description,
+      location,
       timings,
+      prizeMoney,
+      createdBy: req.user.id, // ADMIN ONLY
     });
 
     res.status(201).json({
@@ -20,9 +32,28 @@ export const createEvent = async (req, res, next) => {
   }
 };
 
-export const updateEvent = async (req, res, next) => {
+/**
+ * UPDATE EVENT DETAILS (ADMIN)
+ * Cannot update: state, winners, createdBy
+ */
+export const updateEventDetails = async (req, res, next) => {
   try {
-    const event = await Event.findByIdAndUpdate(req.params.id, req.body, {
+    const allowedFields = [
+      "title",
+      "description",
+      "location",
+      "timings",
+      "prizeMoney",
+    ];
+
+    const updates = {};
+    allowedFields.forEach((field) => {
+      if (req.body[field] !== undefined) {
+        updates[field] = req.body[field];
+      }
+    });
+
+    const event = await Event.findByIdAndUpdate(req.params.id, updates, {
       new: true,
       runValidators: true,
     });
@@ -43,9 +74,89 @@ export const updateEvent = async (req, res, next) => {
   }
 };
 
+/**
+ * UPDATE EVENT STATE (ADMIN)
+ * Enforces state machine
+ */
+export const updateEventState = async (req, res, next) => {
+  try {
+    const { state } = req.body;
+
+    if (!["UPCOMING", "ONGOING", "COMPLETED"].includes(state)) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Invalid state value",
+      });
+    }
+
+    const event = await Event.findById(req.params.id);
+    if (!event) {
+      return res.status(404).json({
+        status: "fail",
+        message: "Event not found",
+      });
+    }
+
+    event.state = state;
+    await event.save(); // triggers schema state validation
+
+    res.status(200).json({
+      status: "success",
+      data: event,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * ADD WINNERS (ADMIN)
+ * Only when state === COMPLETED
+ */
+export const addWinners = async (req, res, next) => {
+  try {
+    const { winners } = req.body;
+
+    if (!Array.isArray(winners) || winners.length === 0) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Winners must be a non-empty array",
+      });
+    }
+
+    const event = await Event.findById(req.params.id);
+    if (!event) {
+      return res.status(404).json({
+        status: "fail",
+        message: "Event not found",
+      });
+    }
+
+    if (event.state !== "COMPLETED") {
+      return res.status(400).json({
+        status: "fail",
+        message: "Winners can be added only after event completion",
+      });
+    }
+
+    event.winners = winners;
+    await event.save();
+
+    res.status(200).json({
+      status: "success",
+      data: event,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * DELETE EVENT (ADMIN – soft delete recommended)
+ */
 export const deleteEvent = async (req, res, next) => {
   try {
-    const event = await Event.findByIdAndDelete(req.params.id);
+    const event = await Event.findById(req.params.id);
 
     if (!event) {
       return res.status(404).json({
@@ -53,6 +164,8 @@ export const deleteEvent = async (req, res, next) => {
         message: "Event not found",
       });
     }
+
+    await event.deleteOne();
 
     res.status(204).json({
       status: "success",
@@ -63,41 +176,52 @@ export const deleteEvent = async (req, res, next) => {
   }
 };
 
-export const getAllEvents = async (req, res, next) =>
-  Event.find()
-    .then((events) => {
-      res.status(200).json({
-        status: "success",
-        data: events,
-      });
-    })
-    .catch((err) => {
-      next(err);
+/**
+ * GET ALL EVENTS (PUBLIC)
+ * Only UPCOMING / ONGOING
+ */
+export const getAllPublicEvents = async (req, res, next) => {
+  try {
+    const events = await Event.find({
+      state: { $in: ["UPCOMING", "ONGOING"] },
+    }).sort({ "timings.from": 1 });
+
+    res.status(200).json({
+      status: "success",
+      data: events,
     });
+  } catch (err) {
+    next(err);
+  }
+};
 
-export const getEventById = async (req, res, next) =>
-  Event.findById(req.params.id)
-    .then((event) => {
-      if (!event) {
-        return res.status(404).json({
-          status: "fail",
-          message: "Event not found",
-        });
-      }
+/**
+ * GET EVENT BY ID (PUBLIC)
+ */
+export const getEventById = async (req, res, next) => {
+  try {
+    const event = await Event.findById(req.params.id);
 
-      res.status(200).json({
-        status: "success",
-        data: event,
+    if (!event) {
+      return res.status(404).json({
+        status: "fail",
+        message: "Event not found",
       });
-    })
-    .catch((err) => {
-      next(err);
-    });
+    }
 
-export default {
-  createEvent,
-  updateEvent,
-  deleteEvent,
-  getAllEvents,
-  getEventById,
+    // hide future internal events from public
+    if (event.state === "UPCOMING") {
+      return res.status(403).json({
+        status: "fail",
+        message: "Event not available",
+      });
+    }
+
+    res.status(200).json({
+      status: "success",
+      data: event,
+    });
+  } catch (err) {
+    next(err);
+  }
 };

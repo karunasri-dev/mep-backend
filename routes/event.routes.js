@@ -2,10 +2,12 @@
 import express from "express";
 import {
   createEvent,
-  updateEvent,
+  updateEventDetails,
   deleteEvent,
-  getAllEvents,
   getEventById,
+  updateEventState,
+  getAllPublicEvents,
+  addWinners,
 } from "../controllers/event.controller.js";
 import { protect, restrictTo } from "../middleware/auth.middleware.js";
 
@@ -15,9 +17,17 @@ router.use(protect);
 router.use(restrictTo("admin"));
 
 router.post("/", createEvent);
-router.patch("/:id", updateEvent);
+
+router.post("/:id/winners", addWinners);
+
+router.patch("/:id", updateEventDetails);
+
+router.patch("/:id/status", updateEventState);
+
 router.delete("/:id", deleteEvent);
-router.get("/", getAllEvents);
+
+router.get("/", getAllPublicEvents);
+
 router.get("/:id", getEventById);
 
 export default router;
