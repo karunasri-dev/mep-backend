@@ -7,6 +7,7 @@ import {
   resetPassword,
 } from "../controllers/auth.controller.js";
 import { protect, restrictTo } from "../middleware/auth.middleware.js";
+import { verifyUser } from "../controllers/auth.controller.js";
 
 const router = express.Router();
 

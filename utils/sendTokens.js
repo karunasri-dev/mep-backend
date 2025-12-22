@@ -16,21 +16,21 @@ export const verifyRefreshToken = (token) =>
 export const sendTokens = (res, accessToken, refreshToken) => {
   res.cookie("accessToken", accessToken, {
     httpOnly: true,
-    // secure: true,
-    // sameSite: "strict",
+    secure: true,
+    sameSite: "strict",
     // for post man
-    secure: false,
-    sameSite: "lax",
+    // secure: false,
+    // sameSite: "lax",
     maxAge: 15 * 60 * 1000,
   });
 
   res.cookie("refreshToken", refreshToken, {
     httpOnly: true,
-    // secure: true,
-    // sameSite: "strict",
+    secure: true,
+    sameSite: "strict",
     // for post man
-    secure: false,
-    sameSite: "lax",
+    // secure: false,
+    // sameSite: "lax",
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 };

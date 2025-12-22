@@ -29,8 +29,13 @@ export const signup = async (req, res, next) => {
       password,
     });
 
-    const accessToken = user.signAccessToken();
-    const refreshToken = user.signRefreshToken();
+    const payload = {
+      id: user._id,
+      role: user.role, // "USER" or "ADMIN"
+    };
+
+    const accessToken = signAccessToken(payload);
+    const refreshToken = signRefreshToken(payload);
 
     sendTokens(res, accessToken, refreshToken);
 
@@ -42,6 +47,7 @@ export const signup = async (req, res, next) => {
           username: user.username,
           role: user.role,
         },
+        accessToken,
       },
     });
   } catch (err) {

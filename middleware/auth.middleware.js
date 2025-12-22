@@ -15,6 +15,7 @@ export const protect = async (req, res, next) => {
     let decoded;
     try {
       decoded = jwt.verify(token, process.env.JWT_ACCESS_TOKEN);
+      req.user = decoded;
     } catch {
       return next(new AppError("Token expired or invalid", 401));
     }
@@ -50,3 +51,10 @@ export const restrictTo =
     }
     next();
   };
+
+// export const requireRole = (role) => {
+//   return (req, res, next) => {
+//     if (req.user.role !== role) return res.sendStatus(403);
+//     next();
+//   };
+// };
