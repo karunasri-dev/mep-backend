@@ -1,10 +1,10 @@
-// routes/auth.routes.js
 import express from "express";
 import {
   signup,
   login,
   forgotPassword,
   resetPassword,
+  refreshAccessToken,
 } from "../controllers/auth.controller.js";
 import { protect, restrictTo } from "../middleware/auth.middleware.js";
 import { verifyUser } from "../controllers/auth.controller.js";
@@ -24,4 +24,5 @@ router.get("/admin", protect, restrictTo("admin"), (req, res) =>
 );
 
 router.get("/user", verifyUser);
+router.post("/refresh", refreshAccessToken);
 export default router;

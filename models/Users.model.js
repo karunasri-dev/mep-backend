@@ -76,7 +76,6 @@ userSchema.methods.signAccessToken = function () {
     {
       id: this._id,
       role: this.role,
-      tv: this.tokenVersion,
     },
     process.env.JWT_ACCESS_TOKEN,
     { expiresIn: "15m" }

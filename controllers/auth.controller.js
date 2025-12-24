@@ -29,13 +29,8 @@ export const signup = async (req, res, next) => {
       password,
     });
 
-    const payload = {
-      id: user._id,
-      role: user.role, // "USER" or "ADMIN"
-    };
-
-    const accessToken = signAccessToken(payload);
-    const refreshToken = signRefreshToken(payload);
+    const accessToken = user.signAccessToken();
+    const refreshToken = user.signRefreshToken();
 
     sendTokens(res, accessToken, refreshToken);
 
@@ -47,7 +42,6 @@ export const signup = async (req, res, next) => {
           username: user.username,
           role: user.role,
         },
-        accessToken,
       },
     });
   } catch (err) {
@@ -90,9 +84,11 @@ export const login = async (req, res, next) => {
           username: user.username,
           role: user.role,
         },
+        accessToken,
       },
     });
   } catch (err) {
+    console.log("Login error:", err);
     next(err);
   }
 };
@@ -100,6 +96,7 @@ export const login = async (req, res, next) => {
 // REFRESH ACCESS TOKEN
 export const refreshAccessToken = async (req, res, next) => {
   try {
+    console.log("REFRESH ACCESS TOKEN");
     const refreshToken = req.cookies.refreshToken;
     if (!refreshToken) {
       return next(new AppError("No refresh token", 401));
@@ -108,8 +105,8 @@ export const refreshAccessToken = async (req, res, next) => {
     let decoded;
     try {
       decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_TOKEN);
-    } catch {
-      return next(new AppError("Invalid refresh token", 401));
+    } catch (err) {
+      return next(new AppError("Invalid or expired refresh token", 401));
     }
 
     const user = await User.findById(decoded.id);
@@ -117,9 +114,14 @@ export const refreshAccessToken = async (req, res, next) => {
       return next(new AppError("User no longer exists", 401));
     }
 
+    // CRITICAL: invalidate old refresh tokens
     if (user.tokenVersion !== decoded.tv) {
       return next(new AppError("Refresh token invalidated", 401));
     }
+
+    // Rotate refresh token properly
+    user.tokenVersion += 1;
+    await user.save();
 
     const newAccessToken = user.signAccessToken();
     const newRefreshToken = user.signRefreshToken();
@@ -208,6 +210,11 @@ export const resetPassword = async (req, res, next) => {
 // verify me
 
 export const verifyUser = async (req, res, next) => {
+  // Prevent caching of authentication status
+  res.set("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.set("Pragma", "no-cache");
+  res.set("Expires", "0");
+
   const token = req.cookies.refreshToken;
 
   if (!token) {
@@ -217,15 +224,22 @@ export const verifyUser = async (req, res, next) => {
   try {
     const decoded = verifyRefreshToken(token);
 
-    const user = {
-      id: decoded.id,
-      mobileNumber: decoded.mobileNumber,
+    const user = await User.findById(decoded.id);
+    if (!user) {
+      return res.status(401).json({ message: "User not found" });
+    }
+
+    const userData = {
+      id: user._id,
+      mobileNumber: user.mobileNumber,
+      username: user.username,
+      role: user.role,
     };
 
-    const newAccessToken = signAccessToken(user);
+    const newAccessToken = signAccessToken(userData);
 
     res.json({
-      user,
+      user: userData,
       accessToken: newAccessToken,
     });
   } catch (err) {
