@@ -1,7 +1,6 @@
 import Team from "../models/Team.model.js";
 import AppError from "../utils/AppError.js";
 import TeamAudit from "../models/TeamAudit.model.js";
-import { type } from "os";
 
 /**
  * USER: Create Team (PENDING)
@@ -103,6 +102,45 @@ export const createTeam = async (req, res, next) => {
 };
 
 /**
+ * USER: Update Team
+ * PUT /api/teams/:teamId
+ */
+export const updateTeam = async (req, res, next) => {
+  try {
+    const { teamId } = req.params;
+    const { teamName, bulls, teamMembers } = req.body;
+
+    const team = await Team.findById(teamId);
+    if (!team) {
+      return next(new AppError("Team not found", 404));
+    }
+
+    // Check if user is owner
+    const owner = team.members.find(
+      (m) =>
+        m.role === "OWNER" && m.userId.toString() === req.user._id.toString()
+    );
+    if (!owner) {
+      return next(new AppError("Only team owner can update", 403));
+    }
+
+    // Update fields
+    if (teamName) team.teamName = teamName;
+    if (bulls) team.bulls = bulls;
+    if (teamMembers) team.members = teamMembers;
+
+    await team.save();
+
+    res.status(200).json({
+      status: "success",
+      data: team,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
  * ADMIN: Approve / Reject Team (ATOMIC)
  * PATCH /api/teams/:teamId/decision
  */
@@ -181,7 +219,6 @@ export const getPendingTeams = async (req, res, next) => {
       page,
       totalPages: Math.ceil(total / limit),
       totalResults: total,
-      results: teams.length,
       data: teams,
     });
   } catch (err) {

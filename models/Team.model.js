@@ -8,7 +8,7 @@ const bullSchema = new mongoose.Schema(
   {
     name: {
       type: String,
-      required: [true, "Bull name is required"],
+      required: true,
       trim: true,
       minlength: 2,
       maxlength: 50,
@@ -30,7 +30,7 @@ const bullSchema = new mongoose.Schema(
 );
 
 /**
- * Validate bull category + value consistency
+ * Bull category validation
  */
 bullSchema.pre("validate", function () {
   const allowedMap = {
@@ -60,7 +60,7 @@ const teamMemberSchema = new mongoose.Schema(
 
     name: {
       type: String,
-      required: [true, "Member name is required"],
+      required: true,
       trim: true,
       minlength: 2,
       maxlength: 50,
@@ -93,7 +93,7 @@ const teamSchema = new mongoose.Schema(
   {
     teamName: {
       type: String,
-      required: [true, "Team name is required"],
+      required: true,
       trim: true,
       minlength: 3,
       maxlength: 50,
@@ -165,38 +165,40 @@ const teamSchema = new mongoose.Schema(
 );
 
 /**
- * One user cannot create two teams with the same name
+ * Prevent duplicate team names per user
  */
 teamSchema.index({ teamName: 1, createdBy: 1 }, { unique: true });
 
 /**
- * Team-level invariants
+ * Cross-field & lifecycle invariants (THROW-BASED)
  */
-teamSchema.pre("save", function () {
+teamSchema.pre("save", async function () {
+  // Exactly one OWNER
   const owners = this.teamMembers.filter((m) => m.role === "OWNER");
-
   if (owners.length !== 1) {
-    return new Error("Exactly one OWNER is required in teamMembers");
+    throw new Error("Exactly one OWNER is required in teamMembers");
   }
 
+  // OWNER must be creator
   const owner = owners[0];
   if (owner.userId && !owner.userId.equals(this.createdBy)) {
-    return new Error("OWNER must be the team creator");
+    throw new Error("OWNER must be the team creator");
   }
 
+  // Approved rules
   if (this.status === "APPROVED") {
     if (!this.approvedBy) {
-      return new Error("approvedBy is required when status is APPROVED");
+      throw new Error("approvedBy is required when status is APPROVED");
     }
-    if (!this.approvedAt) {
-      this.approvedAt = new Date();
-    }
+    this.approvedAt = this.approvedAt || new Date();
   }
 
+  // Rejected rules
   if (this.status === "REJECTED" && !this.rejectionReason) {
-    return new Error("rejectionReason is required when status is REJECTED");
+    throw new Error("rejectionReason is required when status is REJECTED");
   }
 
+  // Reset approval fields if not approved
   if (this.status !== "APPROVED") {
     this.approvedBy = undefined;
     this.approvedAt = undefined;

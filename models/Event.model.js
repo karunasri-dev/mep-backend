@@ -84,7 +84,7 @@ eventSchema.pre("validate", function () {
   }
 
   if (this.timings.to <= this.timings.from) {
-    throw new Error("Event end date must be after start date");
+    return new Error("Event end date must be after start date");
   }
 });
 

@@ -1,30 +1,82 @@
 import express from "express";
 import {
   createTeam,
+  getMyTeams,
+  getTeamById,
+  deactivateTeam,
   getPendingTeams,
   decideTeam,
-  getTeamById,
-  getMyTeams,
-  deactivateTeam,
   getTeamAudit,
+  updateTeam,
 } from "../controllers/team.controller.js";
 import { protect, restrictTo } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
-router.post("/", protect, createTeam);
+/**
+ * All routes below require login
+ */
+router.use(protect);
 
-router.get("/:teamId", protect, getTeamById);
+/* =====================================================
+   USER FLOW
+   ===================================================== */
 
-router.get("/my-team", protect, getMyTeams);
+/**
+ * User creates a team → status = PENDING
+ * POST /api/teams
+ */
+router.post("/", createTeam);
 
-router.get("/pending", protect, restrictTo("admin"), getPendingTeams);
+/**
+ * User updates their team
+ * PUT /api/teams/:teamId
+ */
+router.put("/:teamId", updateTeam);
 
-router.patch("/:teamId/decision", protect, restrictTo("admin"), decideTeam);
+/**
+ * User fetches their teams (pending / approved / rejected)
+ * GET /api/teams/my-teams
+ */
+router.get("/my-teams", getMyTeams);
 
-router.patch("/:teamId/deactivate", protect, deactivateTeam);
+/**
+ * User deactivates their own team (only if NOT approved)
+ * PATCH /api/teams/:teamId/deactivate
+ */
+router.patch("/:teamId/deactivate", deactivateTeam);
 
-//
-router.get("/:teamId/audit", protect, restrictTo("admin"), getTeamAudit);
+/* =====================================================
+   ADMIN FLOW
+   ===================================================== */
+
+/**
+ * Admin fetches pending teams for review
+ * GET /api/teams/pending
+ */
+router.get("/pending", restrictTo("admin"), getPendingTeams);
+
+/**
+ * Admin approves or rejects a team
+ * PATCH /api/teams/:teamId/decision
+ * body: { decision: "APPROVED" | "REJECTED", rejectionReason? }
+ */
+router.patch("/:teamId/decision", restrictTo("admin"), decideTeam);
+
+/**
+ * Admin views audit history of a team
+ * GET /api/teams/:teamId/audit
+ */
+router.get("/:teamId/audit", restrictTo("admin"), getTeamAudit);
+
+/* =====================================================
+   SHARED (LAST — IMPORTANT)
+   ===================================================== */
+
+/**
+ * Get team details (owner or admin)
+ * GET /api/teams/:teamId
+ */
+router.get("/:teamId", getTeamById);
 
 export default router;

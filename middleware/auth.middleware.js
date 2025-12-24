@@ -5,6 +5,9 @@ import AppError from "../utils/AppError.js";
 
 export const protect = async (req, res, next) => {
   try {
+    // Skip authentication for OPTIONS requests (CORS preflight)
+    if (req.method === "OPTIONS") return next();
+
     const token = req.cookies.accessToken;
     // || req.headers("Authorization")?.split(" ")[1];
     if (!token) {
@@ -46,6 +49,8 @@ export const protect = async (req, res, next) => {
 export const restrictTo =
   (...roles) =>
   (req, res, next) => {
+    console.log("Restricted too", req.user);
+    console.log("Restricted too roles", roles);
     if (!roles.includes(req.user.role)) {
       return next(new AppError("Permission denied", 403));
     }
