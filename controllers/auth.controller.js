@@ -91,7 +91,8 @@ export const login = async (req, res, next) => {
 // REFRESH ACCESS TOKEN
 export const refreshAccessToken = async (req, res, next) => {
   try {
-    // console.log("REFRESH ACCESS TOKEN");
+    // console.log("REFRESH ACCESS TOKEN at controller");
+    // console.log(req.cookies.refreshToken);
     const refreshToken = req.cookies.refreshToken;
     if (!refreshToken) {
       return next(new AppError("No refresh token", 401));
@@ -272,11 +273,8 @@ export const verifyUser = async (req, res, next) => {
       return res.status(401).json({ message: "User not found" });
     }
 
-    const newAccessToken = user.signAccessToken();
-
-    res.json({
+    res.status(200).json({
       user: user,
-      accessToken: newAccessToken,
     });
   } catch (err) {
     return res.status(401).json({ message: "Invalid refresh token" });

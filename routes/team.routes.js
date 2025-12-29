@@ -1,7 +1,7 @@
 import express from "express";
 import {
   createTeam,
-  getMyTeams,
+  getMyTeam,
   updateTeamRoster,
   getTeamById,
   deactivateTeam,
@@ -39,9 +39,9 @@ router.post("/", createTeam);
 
 /**
  * Get my teams
- * GET /api/teams/my-teams
+ * GET /api/teams/my-team
  */
-router.get("/my-teams", getMyTeams);
+router.get("/my-team", getMyTeam);
 
 /**
  * Update team roster

@@ -5,16 +5,13 @@ import AppError from "../utils/AppError.js";
 
 export const protect = async (req, res, next) => {
   try {
-    // console.log(
-    //   "🚀 ~ file: auth.middleware.js ~ line 4 ~ protect ~ req.method",
-    //   req.method,
-    //   req.originalUrl
-    // );
-
-    if (req.method === "OPTIONS") return next();
+    if (req.method === "OPTIONS") return res.sendStatus(204);
 
     const token =
       req.cookies.accessToken || req.headers.authorization?.split(" ")[1];
+
+    // console.log("Cookies", req.cookies);
+    // console.log("checking Token at protect", token);
 
     if (!token) {
       return next(new AppError("Not authenticated", 401));
@@ -57,7 +54,7 @@ export const protect = async (req, res, next) => {
 export const restrictTo =
   (...roles) =>
   (req, res, next) => {
-    console.log("Restricted too", req.user);
+    // console.log("Restricted too", req.user);
     console.log("Restricted too roles", roles);
     if (!roles.includes(req.user.role)) {
       return next(new AppError("Permission denied", 403));

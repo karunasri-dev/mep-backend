@@ -299,19 +299,24 @@ export const getTeamById = async (req, res, next) => {
  * GET /api/teams/mine
  */
 
-export const getMyTeams = async (req, res, next) => {
+export const getMyTeam = async (req, res, next) => {
   try {
-    const teams = await Team.find({
-      createdBy: req.user._id,
+    const team = await Team.findOne({
       isActive: true,
-    })
-      .sort({ createdAt: -1 })
-      .lean();
+      status: "APPROVED",
+      "teamMembers.userId": req.user._id,
+    }).lean();
+
+    if (!team) {
+      return res.status(404).json({
+        status: "fail",
+        message: "User does not belong to any approved team",
+      });
+    }
 
     res.status(200).json({
       status: "success",
-      results: teams.length,
-      data: teams,
+      data: team,
     });
   } catch (err) {
     next(err);
@@ -344,7 +349,7 @@ export const getTeamAudit = async (req, res, next) => {
 export const getActiveTeams = async (req, res, next) => {
   try {
     const teams = await Team.find({ isActive: true }).lean();
-    console.log("teams", teams);
+    // console.log("teams", teams);
     res.status(200).json({
       status: "success",
       results: teams.length,
