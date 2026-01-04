@@ -54,6 +54,8 @@ app.use("/api/admin/registrations", adminRegistrationRoutes);
 app.use("/api/performance", performanceRoutes);
 app.use("/api/admin", adminEventDayRoutes);
 app.use("/api/event-days", dayBullPairsRoutes);
+// alias mount for admin day-bullpairs to match frontend service paths
+app.use("/api/admin/day-bullpairs", dayBullPairsRoutes);
 
 // global error handler - must be after routes
 app.use(globalErrorHandler);
