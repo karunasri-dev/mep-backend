@@ -1,6 +1,7 @@
 import Team from "../models/Team.model.js";
 import AppError from "../utils/AppError.js";
 import TeamAudit from "../models/TeamAudit.model.js";
+import { mongoose } from "mongoose";
 
 /**
  * USER: Create Team (PENDING)
@@ -77,15 +78,14 @@ export const updateTeamRoster = async (req, res, next) => {
     }
 
     //  Resolve OWNER (IMMUTABLE)
-    const owner = team.teamMembers.find(
-      (m) =>
-        m.role === "OWNER" &&
-        m.userId &&
-        m.userId.toString() === req.user._id.toString()
-    );
-
+    let owner = team.teamMembers.find((m) => m.role === "OWNER");
     if (!owner) {
-      return next(new AppError("Owner missing (data corruption)", 500));
+      team.teamMembers.unshift({
+        name: req.user.username || "Owner",
+        role: "OWNER",
+        userId: req.user._id,
+      });
+      owner = team.teamMembers.find((m) => m.role === "OWNER");
     }
 
     //  Validate ObjectIds
@@ -134,37 +134,38 @@ export const updateTeamRoster = async (req, res, next) => {
       });
     });
 
-    //  Update team members (FULL REPLACE, EXPLICIT)
-    if (teamMembers.length === 0) {
-      return next(new AppError("Team must contain at least one member", 400));
-    }
-
-    const updatedMembers = [];
+    const existingNonOwner = team.teamMembers.filter(
+      (m) => m.role !== "OWNER"
+    );
+    const byId = new Map(
+      existingNonOwner.map((m) => [m._id.toString(), m])
+    );
+    const nextMembers = [...existingNonOwner];
 
     teamMembers.forEach((incoming) => {
-      // OWNER is immutable — skip silently
       if (incoming.role === "OWNER") return;
 
-      if (!incoming._id) return;
+      if (incoming._id) {
+        const id = incoming._id.toString();
+        const found = byId.get(id);
+        if (found) {
+          found.name = incoming.name;
+          found.role = incoming.role;
+          found.info = incoming.info;
+          found.phone = incoming.phone;
+        }
+        return;
+      }
 
-      const existing = team.teamMembers.id(incoming._id);
-      if (!existing) return;
-
-      existing.name = incoming.name;
-      existing.role = incoming.role;
-      existing.info = incoming.info;
-      existing.phone = incoming.phone;
-
-      updatedMembers.push(existing);
+      nextMembers.push({
+        name: incoming.name,
+        role: incoming.role,
+        info: incoming.info,
+        phone: incoming.phone,
+      });
     });
 
-    // Re-attach OWNER (always first)
-    team.teamMembers = [
-      owner,
-      ...updatedMembers.filter(
-        (m) => m._id.toString() !== owner._id.toString()
-      ),
-    ];
+    team.teamMembers = [owner, ...nextMembers];
 
     //  Persist
     await team.save();
@@ -353,14 +354,13 @@ export const getMyTeam = async (req, res, next) => {
   try {
     const team = await Team.findOne({
       isActive: true,
-      status: "APPROVED",
       createdBy: req.user._id,
     }).lean();
 
     if (!team) {
       return res.status(404).json({
         status: "fail",
-        message: "User does not belong to any approved team",
+        message: "User does not belong to any team",
       });
     }
 

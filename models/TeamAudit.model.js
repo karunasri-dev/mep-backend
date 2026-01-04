@@ -10,7 +10,7 @@ const teamAuditSchema = new mongoose.Schema(
     },
     action: {
       type: String,
-      enum: ["CREATED", "APPROVED", "REJECTED"],
+      enum: ["CREATED", "APPROVED", "REJECTED", "ROSTER_UPDATED"],
       required: true,
     },
     performedBy: {

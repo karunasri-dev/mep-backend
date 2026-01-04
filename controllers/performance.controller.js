@@ -40,6 +40,7 @@ export const getApprovedTeams = async (req, res, next) => {
       captainName: reg.captainName,
       registrationOrder: index + 1,
       hasPlayed: playedTeamIds.has(reg.team._id.toString()),
+      selectedBullPairs: (reg.bullPairs || []).map((bp) => bp.toString()),
     }));
 
     res.status(200).json({
@@ -539,12 +540,12 @@ export const addBullPairsToDay = async (req, res, next) => {
           .status(404)
           .json({ status: "fail", message: "EventDay not found" });
       }
-      if (day.status !== "UPCOMING") {
+      if (day.status === "COMPLETED") {
         await session.abortTransaction();
         session.endSession();
         return res.status(400).json({
           status: "fail",
-          message: "BullPairs can be added only when day is UPCOMING",
+          message: "BullPairs cannot be added after day completion",
         });
       }
       for (const item of entries) {
@@ -729,10 +730,23 @@ export const updateDayBullPairPerformance = async (req, res, next) => {
         .status(404)
         .json({ status: "fail", message: "Entry not found" });
     }
-    if (entry.gameStatus !== "PLAYING") {
+    const day = await EventDay.findById(entry.eventDay);
+    if (day && day.status === "COMPLETED") {
       return res.status(400).json({
         status: "fail",
-        message: "Performance can only be recorded when PLAYING",
+        message: "Cannot edit performance after day completion",
+      });
+    }
+    if (entry.isWinner) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Cannot edit performance after winner is set",
+      });
+    }
+    if (!["PLAYING", "COMPLETED"].includes(entry.gameStatus)) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Performance can be updated only when PLAYING or COMPLETED",
       });
     }
     const values = [rockWeightKg, distanceMeters, timeSeconds];
