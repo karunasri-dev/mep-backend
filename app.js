@@ -13,6 +13,8 @@ import teamRoutes from "./routes/team.routes.js";
 import eventRegistraionRoutes from "./routes/eventRegistration.route.js";
 import adminRegistrationRoutes from "./routes/adminEventRegistration.routes.js";
 import performanceRoutes from "./routes/performance.routes.js";
+import adminEventDayRoutes from "./routes/adminEventDay.routes.js";
+import dayBullPairsRoutes from "./routes/dayBullPairs.routes.js";
 
 // global error handler
 
@@ -30,7 +32,6 @@ app.use(
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
-// app.options("/*", cors());
 
 app.use(express.json({ limit: "10kb" }));
 app.use(cookieParser());
@@ -51,6 +52,8 @@ app.use("/api/teams", teamRoutes);
 app.use("/api/events", eventRegistraionRoutes);
 app.use("/api/admin/registrations", adminRegistrationRoutes);
 app.use("/api/performance", performanceRoutes);
+app.use("/api/admin", adminEventDayRoutes);
+app.use("/api/event-days", dayBullPairsRoutes);
 
 // global error handler - must be after routes
 app.use(globalErrorHandler);

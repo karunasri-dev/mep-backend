@@ -14,7 +14,7 @@ export const getRegistrationsByEvent = async (req, res, next) => {
     }
 
     const registrations = await EventRegistration.find({ event: eventId })
-      .populate("team", "teamName")
+      .populate("team", "teamName bullPairs")
       .populate("registeredBy", "username mobileNumber")
       .sort({ createdAt: -1 });
 

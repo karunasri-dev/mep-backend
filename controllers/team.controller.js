@@ -412,13 +412,19 @@ export const getActiveTeams = async (req, res, next) => {
 export const getTeamsByStatus = async (req, res, next) => {
   try {
     const { status } = req.params;
-    const filter = {};
-    if (status && status !== "all") {
-      filter.status = status.toUpperCase(); // DB stores enum
+    const allowed = ["PENDING", "APPROVED", "REJECTED", "ALL"];
+    const normalized = (status || "PENDING").toUpperCase();
+    if (!allowed.includes(normalized)) {
+      return next(new AppError("Invalid status filter", 400));
     }
-    const teams = await Team.find({ filter })
-      .populate("createdBy", "name")
-      .sort({ createdAt: -1 });
+    const filter =
+      normalized === "ALL"
+        ? { isActive: true }
+        : { status: normalized, isActive: true };
+    const teams = await Team.find(filter)
+      .populate("createdBy", "name mobileNumber")
+      .sort({ createdAt: -1 })
+      .lean();
 
     res.status(200).json({
       status: "success",

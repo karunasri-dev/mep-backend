@@ -1,4 +1,5 @@
 import Event from "../models/Event.model.js";
+import EventDay from "../models/EventDay.model.js";
 
 /**
  * CREATE EVENT (ADMIN)
@@ -7,10 +8,24 @@ export const createEvent = async (req, res, next) => {
   try {
     const { title, description, location, timings, prizeMoney } = req.body;
 
+    console.log("Event details", req.body);
+
     if (!title || !location || !timings || prizeMoney === undefined) {
       return res.status(400).json({
         status: "fail",
         message: "Missing required fields",
+      });
+    }
+
+    // Validate location object
+    if (
+      typeof location !== "object" ||
+      !location.name ||
+      !location.googleMapUrl
+    ) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Location name and googleMapUrl are required",
       });
     }
 
@@ -52,6 +67,30 @@ export const updateEventDetails = async (req, res, next) => {
         updates[field] = req.body[field];
       }
     });
+
+    // Validate location if provided
+    if (updates.location !== undefined) {
+      const loc = updates.location;
+      if (typeof loc !== "object" || !loc.name || !loc.googleMapUrl) {
+        return res.status(400).json({
+          status: "fail",
+          message: "Location name and googleMapUrl are required",
+        });
+      }
+    }
+
+    // Block editing once any day has started (ONGOING or COMPLETED)
+    const started = await EventDay.exists({
+      event: req.params.id,
+      status: { $in: ["ONGOING", "COMPLETED"] },
+    });
+    if (started) {
+      return res.status(400).json({
+        status: "fail",
+        message:
+          "Event details cannot be edited after gameplay has started or completed",
+      });
+    }
 
     const event = await Event.findByIdAndUpdate(req.params.id, updates, {
       new: true,
@@ -162,6 +201,15 @@ export const deleteEvent = async (req, res, next) => {
       return res.status(404).json({
         status: "fail",
         message: "Event not found",
+      });
+    }
+
+    // Block deletion if any day exists
+    const hasDays = await EventDay.exists({ event: req.params.id });
+    if (hasDays) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Event cannot be deleted after days are created",
       });
     }
 

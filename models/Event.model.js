@@ -35,9 +35,17 @@ const eventSchema = new mongoose.Schema(
     },
 
     location: {
-      type: String,
-      required: true,
-      trim: true,
+      name: {
+        type: String,
+        required: true,
+        trim: true,
+        maxlength: 150,
+      },
+      googleMapUrl: {
+        type: String,
+        required: true,
+        trim: true,
+      },
     },
 
     timings: {

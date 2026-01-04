@@ -1,6 +1,7 @@
 import Event from "../models/Event.model.js";
 import EventRegistration from "../models/EventRegistration.model.js";
 import Team from "../models/Team.model.js";
+import EventDay from "../models/EventDay.model.js";
 
 export const registerForEvent = async (req, res, next) => {
   try {
@@ -28,10 +29,10 @@ export const registerForEvent = async (req, res, next) => {
       });
     }
 
-    if (event.state !== "UPCOMING") {
+    if (event.state === "COMPLETED") {
       return res.status(400).json({
         status: "fail",
-        message: "Event is not open for registration",
+        message: "Registration closed for this event",
       });
     }
 
@@ -41,15 +42,15 @@ export const registerForEvent = async (req, res, next) => {
     if (now >= registrationDeadline) {
       return res.status(400).json({
         status: "fail",
-        message: "Registration closed for this event",
+        message: "Registration closed after event end time",
       });
     }
 
-    // Resolve user's APPROVED team via membership
+    // Resolve user's APPROVED team (owner or member)
     const team = await Team.findOne({
       status: "APPROVED",
       isActive: true,
-      createdBy: req.user.id,
+      $or: [{ createdBy: req.user.id }, { "teamMembers.userId": req.user.id }],
     });
 
     if (!team) {
@@ -82,6 +83,15 @@ export const registerForEvent = async (req, res, next) => {
       return res.status(400).json({
         status: "fail",
         message: "Invalid team member selection",
+      });
+    }
+
+    // Block registration if all existing event days are COMPLETED
+    const days = await EventDay.find({ event: eventId }).select("status").lean();
+    if (days.length > 0 && days.every((d) => d.status === "COMPLETED")) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Registration closed. All event days are completed",
       });
     }
 
@@ -126,6 +136,27 @@ export const getApprovedParticipants = async (req, res, next) => {
       status: "success",
       data: participants,
     });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getMyRegistrationStatus = async (req, res, next) => {
+  try {
+    const { eventId } = req.params;
+    const team = await Team.findOne({
+      status: "APPROVED",
+      isActive: true,
+      $or: [{ createdBy: req.user.id }, { "teamMembers.userId": req.user.id }],
+    }).select("_id");
+    if (!team) {
+      return res.status(200).json({ status: "success", data: null });
+    }
+    const reg = await EventRegistration.findOne({
+      event: eventId,
+      team: team._id,
+    }).select("_id status createdAt");
+    res.status(200).json({ status: "success", data: reg || null });
   } catch (err) {
     next(err);
   }

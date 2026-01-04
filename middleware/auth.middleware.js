@@ -6,7 +6,7 @@ import { AuthError } from "../utils/AuthError.js";
 
 export const protect = async (req, res, next) => {
   try {
-    if (req.method === "OPTIONS") return res.sendStatus(204);
+    if (req.method === "OPTIONS") return next();
 
     const token =
       req.cookies.accessToken || req.headers.authorization?.split(" ")[1];
@@ -16,7 +16,10 @@ export const protect = async (req, res, next) => {
 
     if (!token) {
       return next(
-        new AuthError({ code: "NO_ACCESS_TOKEN", message: "Access token missing" })
+        new AuthError({
+          code: "NO_ACCESS_TOKEN",
+          message: "Access token missing",
+        })
       );
     }
 
@@ -26,7 +29,10 @@ export const protect = async (req, res, next) => {
     } catch (e) {
       if (e?.name === "TokenExpiredError") {
         return next(
-          new AuthError({ code: "TOKEN_EXPIRED", message: "Access token expired" })
+          new AuthError({
+            code: "TOKEN_EXPIRED",
+            message: "Access token expired",
+          })
         );
       }
       return next(
@@ -46,13 +52,19 @@ export const protect = async (req, res, next) => {
 
     if (!user) {
       return next(
-        new AuthError({ code: "USER_NOT_FOUND", message: "User no longer exists" })
+        new AuthError({
+          code: "USER_NOT_FOUND",
+          message: "User no longer exists",
+        })
       );
     }
 
     if (user.tokenVersion !== decoded.tv) {
       return next(
-        new AuthError({ code: "TOKEN_INVALIDATED", message: "Access token invalidated" })
+        new AuthError({
+          code: "TOKEN_INVALIDATED",
+          message: "Access token invalidated",
+        })
       );
     }
 
