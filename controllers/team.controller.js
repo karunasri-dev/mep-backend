@@ -134,12 +134,8 @@ export const updateTeamRoster = async (req, res, next) => {
       });
     });
 
-    const existingNonOwner = team.teamMembers.filter(
-      (m) => m.role !== "OWNER"
-    );
-    const byId = new Map(
-      existingNonOwner.map((m) => [m._id.toString(), m])
-    );
+    const existingNonOwner = team.teamMembers.filter((m) => m.role !== "OWNER");
+    const byId = new Map(existingNonOwner.map((m) => [m._id.toString(), m]));
     const nextMembers = [...existingNonOwner];
 
     teamMembers.forEach((incoming) => {
@@ -422,6 +418,22 @@ export const getTeamsByStatus = async (req, res, next) => {
         ? { isActive: true }
         : { status: normalized, isActive: true };
     const teams = await Team.find(filter)
+      .populate("createdBy", "name mobileNumber")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.status(200).json({
+      status: "success",
+      data: teams,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getAllTeams = async (req, res, next) => {
+  try {
+    const teams = await Team.find({ isActive: true })
       .populate("createdBy", "name mobileNumber")
       .sort({ createdAt: -1 })
       .lean();

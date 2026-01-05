@@ -16,6 +16,7 @@ import performanceRoutes from "./routes/performance.routes.js";
 import adminEventDayRoutes from "./routes/adminEventDay.routes.js";
 import dayBullPairsRoutes from "./routes/dayBullPairs.routes.js";
 import statsRoutes from "./routes/stats.routes.js";
+import dashboardRoutes from "./routes/dashboard.routes.js";
 
 // global error handler
 
@@ -58,6 +59,7 @@ app.use("/api/event-days", dayBullPairsRoutes);
 // alias mount for admin day-bullpairs to match frontend service paths
 app.use("/api/admin/day-bullpairs", dayBullPairsRoutes);
 app.use("/api/stats", statsRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
 // global error handler - must be after routes
 app.use(globalErrorHandler);

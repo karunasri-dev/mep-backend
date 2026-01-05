@@ -10,6 +10,7 @@ import {
   getTeamAudit,
   getActiveTeams,
   getTeamsByStatus,
+  getAllTeams,
 } from "../controllers/team.controller.js";
 import { protect, restrictTo } from "../middleware/auth.middleware.js";
 
@@ -22,6 +23,12 @@ const router = express.Router();
  * GET /api/teams/active
  */
 router.get("/active", getActiveTeams);
+
+/**
+ * Get all teams (admin only)
+ * GET /api/teams
+ */
+router.get("/", restrictTo("admin"), getAllTeams);
 
 // AUTHENTICATED ROUTES
 router.use(protect);
