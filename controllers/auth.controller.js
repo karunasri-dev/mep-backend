@@ -4,6 +4,7 @@ import User from "../models/Users.model.js";
 import AppError from "../utils/AppError.js";
 import { AuthError } from "../utils/AuthError.js";
 import { sendTokens, verifyRefreshToken } from "../utils/sendTokens.js";
+import { sendSMS } from "../utils/sms.js";
 
 // SIGNUP
 export const signup = async (req, res, next) => {
@@ -167,18 +168,29 @@ export const forgotPassword = async (req, res, next) => {
     if (!user) {
       return res.status(200).json({
         status: "success",
-        message: "Reset token generated",
+        message: "If the mobile number is registered, a reset code has been sent.",
       });
     }
 
     const resetToken = user.createPasswordResetToken();
     await user.save({ validateBeforeSave: false });
 
-    console.log("RESET TOKEN (dev only):", `/reset-password/${resetToken}`);
+    // Send SMS with reset token
+    const message = `Your password reset code is: ${resetToken}. It expires in 10 minutes. Use it to reset your password.`;
+    try {
+      await sendSMS(user.mobileNumber, message);
+    } catch (smsError) {
+      // If SMS fails, still return success to prevent enumeration, but log error
+      console.error('SMS send failed:', smsError);
+      user.passwordResetToken = undefined;
+      user.passwordResetExpires = undefined;
+      await user.save({ validateBeforeSave: false });
+      return next(new AppError("Failed to send reset code. Please try again.", 500));
+    }
 
     res.status(200).json({
       status: "success",
-      message: "Reset token generated",
+      message: "Reset code sent to your mobile number.",
     });
   } catch (err) {
     next(err);
@@ -237,22 +249,28 @@ export const changePassword = async (req, res, next) => {
       );
     }
 
+    // Get user with password
+    const user = await User.findById(req.user._id).select("+password");
+    if (!user) {
+      return next(new AppError("User not found", 404));
+    }
+
     // Check if current password is correct
-    const isCorrect = await req.user.correctPassword(
+    const isCorrect = await user.correctPassword(
       currentPassword,
-      req.user.password
+      user.password
     );
     if (!isCorrect) {
       return next(new AppError("Current password is incorrect", 400));
     }
 
     // Update password
-    req.user.password = newPassword;
-    await req.user.save(); // This will hash the password and increment tokenVersion
+    user.password = newPassword;
+    await user.save(); // This will hash the password and increment tokenVersion
 
     // Generate new tokens
-    const accessToken = req.user.signAccessToken();
-    const refreshToken = req.user.signRefreshToken();
+    const accessToken = user.signAccessToken();
+    const refreshToken = user.signRefreshToken();
     sendTokens(res, accessToken, refreshToken);
 
     res.status(200).json({
