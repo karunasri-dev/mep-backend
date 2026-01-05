@@ -31,7 +31,9 @@ export const getBullPairStats = async (req, res, next) => {
             $cond: {
               if: { $eq: ["$totalPlays", 0] },
               then: 0,
-              else: { $multiply: [{ $divide: ["$totalWins", "$totalPlays"] }, 100] },
+              else: {
+                $multiply: [{ $divide: ["$totalWins", "$totalPlays"] }, 100],
+              },
             },
           },
           avgDistance: {
@@ -198,7 +200,9 @@ export const getTeamStats = async (req, res, next) => {
                     {
                       $filter: {
                         input: "$teamData.bullPairs",
-                        cond: { $eq: ["$$this._id", "$bestBullPair.bullPairId"] },
+                        cond: {
+                          $eq: ["$$this._id", "$bestBullPair.bullPairId"],
+                        },
                       },
                     },
                     0,
@@ -206,7 +210,11 @@ export const getTeamStats = async (req, res, next) => {
                 },
               },
               in: {
-                $concat: ["$$bullPair.bullA.name", " - ", "$$bullPair.bullB.name"],
+                $concat: [
+                  "$$bullPair.bullA.name",
+                  " - ",
+                  "$$bullPair.bullB.name",
+                ],
               },
             },
           },
@@ -243,7 +251,10 @@ export const getDayLeaderboard = async (req, res, next) => {
   try {
     const { eventId, dayId } = req.params;
 
-    if (!mongoose.Types.ObjectId.isValid(eventId) || !mongoose.Types.ObjectId.isValid(dayId)) {
+    if (
+      !mongoose.Types.ObjectId.isValid(eventId) ||
+      !mongoose.Types.ObjectId.isValid(dayId)
+    ) {
       return next(new AppError("Invalid event or day ID", 400));
     }
 

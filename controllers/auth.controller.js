@@ -168,7 +168,8 @@ export const forgotPassword = async (req, res, next) => {
     if (!user) {
       return res.status(200).json({
         status: "success",
-        message: "If the mobile number is registered, a reset code has been sent.",
+        message:
+          "If the mobile number is registered, a reset code has been sent.",
       });
     }
 
@@ -181,11 +182,13 @@ export const forgotPassword = async (req, res, next) => {
       await sendSMS(user.mobileNumber, message);
     } catch (smsError) {
       // If SMS fails, still return success to prevent enumeration, but log error
-      console.error('SMS send failed:', smsError);
+      console.error("SMS send failed:", smsError);
       user.passwordResetToken = undefined;
       user.passwordResetExpires = undefined;
       await user.save({ validateBeforeSave: false });
-      return next(new AppError("Failed to send reset code. Please try again.", 500));
+      return next(
+        new AppError("Failed to send reset code. Please try again.", 500)
+      );
     }
 
     res.status(200).json({
