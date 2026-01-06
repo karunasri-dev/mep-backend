@@ -325,12 +325,12 @@ export const getTeamById = async (req, res, next) => {
       return next(new AppError("Team not found", 404));
     }
 
-    const isOwner = team.createdBy._id.toString() === req.user._id.toString();
-    const isAdmin = req.user.role === "admin";
+    // const isOwner = team.createdBy._id.toString() === req.user._id.toString();
+    // const isAdmin = req.user.role === "admin";
 
-    if (!isOwner && !isAdmin) {
-      return next(new AppError("Not authorized to view this team", 403));
-    }
+    // if (!isOwner && !isAdmin) {
+    //   return next(new AppError("Not authorized to view this team", 403));
+    // }
 
     res.status(200).json({
       status: "success",
