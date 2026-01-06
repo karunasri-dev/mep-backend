@@ -10,7 +10,7 @@ import { mongoose } from "mongoose";
 
 export const createTeam = async (req, res, next) => {
   try {
-    const { teamName, bullPairs, teamMembers } = req.body;
+    const { teamName, bullPairs, teamMembers, teamLocation } = req.body;
 
     // basic validation
     if (
@@ -28,6 +28,7 @@ export const createTeam = async (req, res, next) => {
       teamName: teamName.trim(),
       bullPairs,
       teamMembers,
+      teamLocation,
       createdBy: req.user._id,
       status: "PENDING", // force
     });
@@ -59,7 +60,7 @@ export const createTeam = async (req, res, next) => {
 
 export const updateTeamRoster = async (req, res, next) => {
   try {
-    const { bullPairs = [], teamMembers = [] } = req.body;
+    const { bullPairs = [], teamMembers = [], teamLocation } = req.body;
 
     //  Basic payload sanity
     if (!Array.isArray(bullPairs) || !Array.isArray(teamMembers)) {
@@ -162,6 +163,17 @@ export const updateTeamRoster = async (req, res, next) => {
     });
 
     team.teamMembers = [owner, ...nextMembers];
+
+    if (teamLocation && typeof teamLocation === "object") {
+      const nextLocation = {};
+      if (typeof teamLocation.city === "string")
+        nextLocation.city = teamLocation.city;
+      if (typeof teamLocation.state === "string")
+        nextLocation.state = teamLocation.state;
+      if (typeof teamLocation.country === "string")
+        nextLocation.country = teamLocation.country;
+      team.teamLocation = nextLocation;
+    }
 
     //  Persist
     await team.save();
@@ -317,6 +329,12 @@ export const deactivateTeam = async (req, res, next) => {
 export const getTeamById = async (req, res, next) => {
   try {
     const { teamId } = req.params;
+
+    // Validate teamId is a valid ObjectId
+    if (!mongoose.Types.ObjectId.isValid(teamId)) {
+      return next(new AppError("Invalid team ID", 400));
+    }
+
     const team = await Team.findById(teamId)
       .populate("createdBy", "name mobileNumber")
       .lean();

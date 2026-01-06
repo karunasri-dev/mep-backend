@@ -125,6 +125,10 @@ export const getTeamStats = async (req, res, next) => {
           totalWins: { $sum: { $cond: ["$isWinner", 1, 0] } },
           totalPrizeWon: { $sum: "$winnerPrizeMoney" },
           totalDistance: { $sum: "$performance.distanceMeters" },
+          totalTime: { $sum: "$performance.timeSeconds" },
+          bestTime: { $min: "$performance.timeSeconds" },
+          maxDistance: { $max: "$performance.distanceMeters" },
+          maxRockWeight: { $max: "$performance.rockWeightKg" },
           bullPairStats: {
             $push: {
               bullPairId: "$bullPairId",
@@ -142,6 +146,13 @@ export const getTeamStats = async (req, res, next) => {
               if: { $eq: ["$totalBullPairPlays", 0] },
               then: 0,
               else: { $divide: ["$totalDistance", "$totalBullPairPlays"] },
+            },
+          },
+          avgTime: {
+            $cond: {
+              if: { $eq: ["$totalBullPairPlays", 0] },
+              then: 0,
+              else: { $divide: ["$totalTime", "$totalBullPairPlays"] },
             },
           },
         },
@@ -230,6 +241,10 @@ export const getTeamStats = async (req, res, next) => {
           totalWins: 1,
           totalPrizeWon: 1,
           avgDistance: { $round: ["$avgDistance", 2] },
+          avgTime: { $round: ["$avgTime", 2] },
+          bestTime: 1,
+          maxDistance: 1,
+          maxRockWeight: 1,
           bestBullPair: "$bestBullPairName",
         },
       },

@@ -158,6 +158,18 @@ const teamSchema = new mongoose.Schema(
       ],
     },
 
+    teamLocation: {
+      type: new mongoose.Schema(
+        {
+          city: { type: String, trim: true },
+          state: { type: String, trim: true },
+          country: { type: String, trim: true },
+        },
+        { _id: false }
+      ),
+      default: undefined,
+    },
+
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

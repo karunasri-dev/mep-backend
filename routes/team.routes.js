@@ -24,8 +24,6 @@ const router = express.Router();
  */
 router.get("/active", getActiveTeams);
 
-router.get("/:teamId", getTeamById);
-
 /**
  * Get all teams (admin only)
  * GET /api/teams
@@ -77,5 +75,6 @@ router.get("/:teamId/audit", restrictTo("admin"), getTeamAudit);
  * Get team by ID (owner or admin)
  * MUST BE LAST
  */
+router.get("/:teamId", getTeamById);
 
 export default router;
