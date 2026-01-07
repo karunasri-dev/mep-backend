@@ -46,6 +46,15 @@ const eventDayBullPairEntrySchema = new mongoose.Schema(
       default: "NEXT",
       index: true,
     },
+    rank: { type: Number, min: 1 },
+    category: {
+      type: {
+        type: String,
+        enum: ["DENTITION", "AGE_GROUP", "CLASS"],
+      },
+      value: { type: String },
+    },
+    resultCalculated: { type: Boolean, default: false },
     performance: performanceSchema,
     isWinner: {
       type: Boolean,

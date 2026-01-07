@@ -7,35 +7,38 @@ import AppError from "../utils/AppError.js";
 export const getBullPairStats = async (req, res, next) => {
   try {
     const stats = await EventDayBullPairEntry.aggregate([
-      // Only completed games
-      { $match: { gameStatus: "COMPLETED" } },
+      // Only ranked (results calculated) entries
+      { $match: { gameStatus: "COMPLETED", resultCalculated: true } },
       // Group by bullPairId
       {
         $group: {
           _id: "$bullPairId",
           team: { $first: "$team" }, // Keep team reference
           totalPlays: { $sum: 1 },
-          totalWins: { $sum: { $cond: ["$isWinner", 1, 0] } },
+          podiumFinishes: {
+            $sum: {
+              $cond: [{ $lte: ["$rank", 3] }, 1, 0],
+            },
+          },
+          bestRank: { $min: "$rank" },
+          avgRank: { $avg: "$rank" },
           maxDistance: { $max: "$performance.distanceMeters" },
           bestTime: { $min: "$performance.timeSeconds" }, // Minimum time is best
           maxRockWeight: { $max: "$performance.rockWeightKg" },
           totalDistance: { $sum: "$performance.distanceMeters" },
           totalTime: { $sum: "$performance.timeSeconds" },
-          totalPrizeWon: { $sum: "$winnerPrizeMoney" }, // Sum prize money for wins
-        },
-      },
-      // Calculate averages and win rate
-      {
-        $addFields: {
-          winRate: {
-            $cond: {
-              if: { $eq: ["$totalPlays", 0] },
-              then: 0,
-              else: {
-                $multiply: [{ $divide: ["$totalWins", "$totalPlays"] }, 100],
-              },
+          // Category breakdown
+          categories: {
+            $push: {
+              category: "$category.value",
+              rank: "$rank",
             },
           },
+        },
+      },
+      // Calculate averages (distance/time) + category-specific stats
+      {
+        $addFields: {
           avgDistance: {
             $cond: {
               if: { $eq: ["$totalPlays", 0] },
@@ -48,6 +51,70 @@ export const getBullPairStats = async (req, res, next) => {
               if: { $eq: ["$totalPlays", 0] },
               then: 0,
               else: { $divide: ["$totalTime", "$totalPlays"] },
+            },
+          },
+          categoryStats: {
+            $map: {
+              input: {
+                $setUnion: ["$categories.category", []],
+              },
+              as: "cat",
+              in: {
+                category: "$$cat",
+                totalPlays: {
+                  $size: {
+                    $filter: {
+                      input: "$categories",
+                      as: "c",
+                      cond: { $eq: ["$$c.category", "$$cat"] },
+                    },
+                  },
+                },
+                podiums: {
+                  $size: {
+                    $filter: {
+                      input: "$categories",
+                      as: "c",
+                      cond: {
+                        $and: [
+                          { $eq: ["$$c.category", "$$cat"] },
+                          { $lte: ["$$c.rank", 3] },
+                        ],
+                      },
+                    },
+                  },
+                },
+                bestRank: {
+                  $min: {
+                    $map: {
+                      input: {
+                        $filter: {
+                          input: "$categories",
+                          as: "c",
+                          cond: { $eq: ["$$c.category", "$$cat"] },
+                        },
+                      },
+                      as: "c2",
+                      in: "$$c2.rank",
+                    },
+                  },
+                },
+                avgRank: {
+                  $avg: {
+                    $map: {
+                      input: {
+                        $filter: {
+                          input: "$categories",
+                          as: "c",
+                          cond: { $eq: ["$$c.category", "$$cat"] },
+                        },
+                      },
+                      as: "c2",
+                      in: "$$c2.rank",
+                    },
+                  },
+                },
+              },
             },
           },
         },
@@ -88,18 +155,19 @@ export const getBullPairStats = async (req, res, next) => {
           },
           teamName: "$teamData.teamName",
           totalPlays: 1,
-          totalWins: 1,
-          winRate: { $round: ["$winRate", 2] },
+          podiumFinishes: 1,
+          bestRank: 1,
+          avgRank: { $round: ["$avgRank", 2] },
           maxDistance: 1,
           bestTime: 1,
           maxRockWeight: 1,
           avgDistance: { $round: ["$avgDistance", 2] },
           avgTime: { $round: ["$avgTime", 2] },
-          totalPrizeWon: 1,
+          categoryStats: 1,
         },
       },
-      // Sort by totalWins desc, then totalPlays desc
-      { $sort: { totalWins: -1, totalPlays: -1 } },
+      // Sort by podiumFinishes desc, then avgRank asc
+      { $sort: { podiumFinishes: -1, avgRank: 1 } },
     ]);
 
     res.status(200).json({
@@ -115,25 +183,28 @@ export const getBullPairStats = async (req, res, next) => {
 export const getTeamStats = async (req, res, next) => {
   try {
     const stats = await EventDayBullPairEntry.aggregate([
-      // Only completed games
-      { $match: { gameStatus: "COMPLETED" } },
+      // Only ranked (results calculated) entries
+      { $match: { gameStatus: "COMPLETED", resultCalculated: true } },
       // Group by team
       {
         $group: {
           _id: "$team",
-          totalBullPairPlays: { $sum: 1 },
-          totalWins: { $sum: { $cond: ["$isWinner", 1, 0] } },
-          totalPrizeWon: { $sum: "$winnerPrizeMoney" },
+          totalRankedEntries: { $sum: 1 },
+          totalPodiums: {
+            $sum: {
+              $cond: [{ $lte: ["$rank", 3] }, 1, 0],
+            },
+          },
+          avgRank: { $avg: "$rank" },
           totalDistance: { $sum: "$performance.distanceMeters" },
           totalTime: { $sum: "$performance.timeSeconds" },
           bestTime: { $min: "$performance.timeSeconds" },
           maxDistance: { $max: "$performance.distanceMeters" },
           maxRockWeight: { $max: "$performance.rockWeightKg" },
-          bullPairStats: {
+          bullPairRanks: {
             $push: {
               bullPairId: "$bullPairId",
-              distance: "$performance.distanceMeters",
-              wins: { $cond: ["$isWinner", 1, 0] },
+              rank: "$rank",
             },
           },
         },
@@ -143,45 +214,38 @@ export const getTeamStats = async (req, res, next) => {
         $addFields: {
           avgDistance: {
             $cond: {
-              if: { $eq: ["$totalBullPairPlays", 0] },
+              if: { $eq: ["$totalRankedEntries", 0] },
               then: 0,
-              else: { $divide: ["$totalDistance", "$totalBullPairPlays"] },
+              else: { $divide: ["$totalDistance", "$totalRankedEntries"] },
             },
           },
           avgTime: {
             $cond: {
-              if: { $eq: ["$totalBullPairPlays", 0] },
+              if: { $eq: ["$totalRankedEntries", 0] },
               then: 0,
-              else: { $divide: ["$totalTime", "$totalBullPairPlays"] },
+              else: { $divide: ["$totalTime", "$totalRankedEntries"] },
             },
           },
         },
       },
-      // Find best bullPair (by max distance, or if tie, by wins)
+      // Find best bullPair (lowest average rank)
       {
         $addFields: {
           bestBullPair: {
             $reduce: {
-              input: "$bullPairStats",
+              input: "$bullPairRanks",
               initialValue: null,
               in: {
                 $cond: {
                   if: {
                     $or: [
                       { $eq: ["$$value", null] },
-                      { $gt: ["$$this.distance", "$$value.maxDistance"] },
-                      {
-                        $and: [
-                          { $eq: ["$$this.distance", "$$value.maxDistance"] },
-                          { $gt: ["$$this.wins", "$$value.wins"] },
-                        ],
-                      },
+                      { $lt: ["$$this.rank", "$$value.rank"] },
                     ],
                   },
                   then: {
                     bullPairId: "$$this.bullPairId",
-                    maxDistance: "$$this.distance",
-                    wins: "$$this.wins",
+                    rank: "$$this.rank",
                   },
                   else: "$$value",
                 },
@@ -237,9 +301,9 @@ export const getTeamStats = async (req, res, next) => {
           _id: 0,
           teamId: "$_id",
           teamName: "$teamData.teamName",
-          totalBullPairPlays: 1,
-          totalWins: 1,
-          totalPrizeWon: 1,
+          totalRankedEntries: 1,
+          totalPodiums: 1,
+          avgRank: { $round: ["$avgRank", 2] },
           avgDistance: { $round: ["$avgDistance", 2] },
           avgTime: { $round: ["$avgTime", 2] },
           bestTime: 1,
@@ -248,8 +312,8 @@ export const getTeamStats = async (req, res, next) => {
           bestBullPair: "$bestBullPairName",
         },
       },
-      // Sort by totalWins desc, then totalPrizeWon desc
-      { $sort: { totalWins: -1, totalPrizeWon: -1 } },
+      // Sort by totalPodiums desc, then avgRank asc
+      { $sort: { totalPodiums: -1, avgRank: 1 } },
     ]);
 
     res.status(200).json({
@@ -318,11 +382,20 @@ export const getDayLeaderboard = async (req, res, next) => {
           distanceMeters: "$performance.distanceMeters",
           timeSeconds: "$performance.timeSeconds",
           rockWeightKg: "$performance.rockWeightKg",
-          isWinner: 1,
+          category: "$category.value",
+          rank: "$rank",
+          resultCalculated: "$resultCalculated",
         },
       },
-      // Sort by distance desc, then time asc
-      { $sort: { distanceMeters: -1, timeSeconds: 1 } },
+      // Sort by category then rank if calculated; else by performance
+      {
+        $sort: {
+          category: 1,
+          rank: 1,
+          distanceMeters: -1,
+          timeSeconds: 1,
+        },
+      },
     ]);
 
     res.status(200).json({

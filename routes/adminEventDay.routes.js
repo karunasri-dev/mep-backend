@@ -5,6 +5,7 @@ import {
   getEventDaysAdmin,
   updateEventDayStatus,
   addBullPairsToDay,
+  calculateDayResults,
 } from "../controllers/performance.controller.js";
 
 const router = express.Router();
@@ -15,5 +16,6 @@ router.post("/events/:eventId/days", createEventDay);
 router.get("/events/:eventId/days", getEventDaysAdmin);
 router.patch("/event-days/:dayId/status", updateEventDayStatus);
 router.post("/event-days/:dayId/bullpairs", addBullPairsToDay);
+router.post("/event-days/:dayId/calculate-results", calculateDayResults);
 
 export default router;

@@ -21,6 +21,13 @@ const eventRegistrationSchema = new mongoose.Schema(
       trim: true,
     },
 
+    contactMobile: {
+      type: String,
+      required: true,
+      trim: true,
+      match: [/^\d{10}$/, "Please enter a valid 10-digit mobile number"],
+    },
+
     // Store selected embedded bullPair IDs
     bullPairs: [
       {

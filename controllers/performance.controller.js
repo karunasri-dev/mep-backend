@@ -403,7 +403,9 @@ export const createEventDay = async (req, res, next) => {
           .status(400)
           .json({ status: "fail", message: "prizeMoney is required" });
       }
-      const exists = await EventDay.findOne({ event: eventId, date }).session(session);
+      const exists = await EventDay.findOne({ event: eventId, date }).session(
+        session
+      );
       if (exists) {
         await session.abortTransaction();
         session.endSession();
@@ -574,6 +576,29 @@ export const addBullPairsToDay = async (req, res, next) => {
             message: "bullPairId not part of registration",
           });
         }
+
+        // Fetch team to snapshot category
+        const teamDoc = await Team.findById(teamId).session(session);
+        if (!teamDoc) {
+          await session.abortTransaction();
+          session.endSession();
+          return res.status(400).json({
+            status: "fail",
+            message: "Team not found",
+          });
+        }
+        const bullPairObj = teamDoc.bullPairs.find(
+          (bp) => bp._id.toString() === bullPairId
+        );
+        if (!bullPairObj) {
+          await session.abortTransaction();
+          session.endSession();
+          return res.status(400).json({
+            status: "fail",
+            message: "BullPair not found in team",
+          });
+        }
+
         const activeElsewhere = await EventDayBullPairEntry.findOne({
           bullPairId,
         })
@@ -603,6 +628,8 @@ export const addBullPairsToDay = async (req, res, next) => {
               bullPairId,
               gameStatus: "NEXT",
               isWinner: false,
+              category: bullPairObj.category, // Snapshot category
+              resultCalculated: false,
             },
           },
           { upsert: true, session }
@@ -661,6 +688,12 @@ export const updateDayBullPairStatus = async (req, res, next) => {
       return res
         .status(404)
         .json({ status: "fail", message: "Entry not found" });
+    }
+    if (entry.resultCalculated) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Cannot change status after results calculated",
+      });
     }
     const day = await EventDay.findById(entry.eventDay);
     if (!day || day.status !== "ONGOING") {
@@ -730,6 +763,12 @@ export const updateDayBullPairPerformance = async (req, res, next) => {
         .status(404)
         .json({ status: "fail", message: "Entry not found" });
     }
+    if (entry.resultCalculated) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Cannot edit performance after results calculated",
+      });
+    }
     const day = await EventDay.findById(entry.eventDay);
     if (day && day.status === "COMPLETED") {
       return res.status(400).json({
@@ -794,7 +833,9 @@ export const setDayBullPairWinner = async (req, res, next) => {
       }
       const dayId = entry.eventDay;
       const day = await EventDay.findById(dayId).session(session);
-      const allEntries = await EventDayBullPairEntry.find({ eventDay: dayId }).session(session);
+      const allEntries = await EventDayBullPairEntry.find({
+        eventDay: dayId,
+      }).session(session);
       if (allEntries.some((e) => e.gameStatus !== "COMPLETED")) {
         await session.abortTransaction();
         session.endSession();
@@ -832,6 +873,103 @@ export const setDayBullPairWinner = async (req, res, next) => {
       session.endSession();
       const enriched = (await attachBullPairSummary([entry]))[0];
       res.status(200).json({ status: "success", data: enriched });
+    } catch (err) {
+      await session.abortTransaction();
+      session.endSession();
+      next(err);
+    }
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * ADMIN: Calculate Results for Day (Category-wise Ranking)
+ */
+export const calculateDayResults = async (req, res, next) => {
+  try {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+      const { dayId } = req.params;
+
+      const day = await EventDay.findById(dayId).session(session);
+      if (!day) {
+        await session.abortTransaction();
+        session.endSession();
+        return res
+          .status(404)
+          .json({ status: "fail", message: "EventDay not found" });
+      }
+
+      const entries = await EventDayBullPairEntry.find({
+        eventDay: dayId,
+      }).session(session);
+
+      if (entries.length === 0) {
+        await session.abortTransaction();
+        session.endSession();
+        return res
+          .status(400)
+          .json({ status: "fail", message: "No entries found for this day" });
+      }
+
+      const incomplete = entries.some((e) => e.gameStatus !== "COMPLETED");
+      if (incomplete) {
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(400).json({
+          status: "fail",
+          message: "All bullPairs must be COMPLETED before calculating results",
+        });
+      }
+
+      // Allow recalculation - reset previous results
+      if (entries.some((e) => e.resultCalculated)) {
+        // Reset ranks and resultCalculated flag for recalculation
+        await EventDayBullPairEntry.updateMany(
+          { eventDay: dayId },
+          { $unset: { rank: 1, resultCalculated: 1, isWinner: 1 } },
+          { session }
+        );
+      }
+
+      const byCategory = {};
+      entries.forEach((e) => {
+        const catKey = e.category?.value || "UNKNOWN";
+        if (!byCategory[catKey]) byCategory[catKey] = [];
+        byCategory[catKey].push(e);
+      });
+
+      for (const catKey in byCategory) {
+        const catEntries = byCategory[catKey];
+        // Sort: Distance DESC, Time ASC
+        catEntries.sort((a, b) => {
+          const distA = a.performance?.distanceMeters || 0;
+          const distB = b.performance?.distanceMeters || 0;
+          if (distA !== distB) return distB - distA;
+
+          const timeA = a.performance?.timeSeconds || Infinity;
+          const timeB = b.performance?.timeSeconds || Infinity;
+          return timeA - timeB;
+        });
+
+        for (let i = 0; i < catEntries.length; i++) {
+          const entry = catEntries[i];
+          entry.rank = i + 1;
+          entry.resultCalculated = true;
+          entry.isWinner = false; // Deprecated
+          await entry.save({ session });
+        }
+      }
+
+      await session.commitTransaction();
+      session.endSession();
+
+      res.status(200).json({
+        status: "success",
+        message: "Results calculated successfully",
+      });
     } catch (err) {
       await session.abortTransaction();
       session.endSession();

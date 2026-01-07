@@ -5,14 +5,25 @@ import EventDay from "../models/EventDay.model.js";
 
 export const registerForEvent = async (req, res, next) => {
   try {
-    const { captainName, bullPairs, teamMembers = [] } = req.body;
+    const {
+      captainName,
+      contactMobile,
+      bullPairs,
+      teamMembers = [],
+    } = req.body;
     const { eventId } = req.params;
 
     // Basic payload validation
-    if (!captainName || !Array.isArray(bullPairs) || bullPairs.length === 0) {
+    if (
+      !captainName ||
+      !contactMobile ||
+      !Array.isArray(bullPairs) ||
+      bullPairs.length === 0
+    ) {
       return res.status(400).json({
         status: "fail",
-        message: "Captain name and at least one bull pair are required",
+        message:
+          "Captain name, contact mobile, and at least one bull pair are required",
       });
     }
 
@@ -87,7 +98,9 @@ export const registerForEvent = async (req, res, next) => {
     }
 
     // Block registration if all existing event days are COMPLETED
-    const days = await EventDay.find({ event: eventId }).select("status").lean();
+    const days = await EventDay.find({ event: eventId })
+      .select("status")
+      .lean();
     if (days.length > 0 && days.every((d) => d.status === "COMPLETED")) {
       return res.status(400).json({
         status: "fail",
@@ -100,6 +113,7 @@ export const registerForEvent = async (req, res, next) => {
       event: eventId,
       team: team._id,
       captainName,
+      contactMobile,
       bullPairs,
       teamMembers,
       registeredBy: req.user.id,
