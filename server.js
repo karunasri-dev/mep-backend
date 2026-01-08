@@ -6,6 +6,10 @@ import connectDB from "./config/db.js";
 
 connectDB();
 
+pp.get("/", (req, res) => {
+  res.send("Project Hub API is running! ");
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
