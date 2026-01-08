@@ -40,8 +40,11 @@ const userSchema = new mongoose.Schema(
     passwordChangedAt: Date,
     tokenVersion: { type: Number, default: 0 },
 
-    passwordResetToken: String,
+    // OTP reset fields
+    passwordResetOTP: String,
     passwordResetExpires: Date,
+    passwordResetAttempts: { type: Number, default: 0 },
+    lastOTPSentAt: Date,
 
     lastLogin: Date,
   },
@@ -94,17 +97,16 @@ userSchema.methods.signRefreshToken = function () {
   );
 };
 
-userSchema.methods.createPasswordResetToken = function () {
-  const resetToken = crypto.randomBytes(32).toString("hex");
+userSchema.methods.createPasswordResetOTP = function () {
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-  this.passwordResetToken = crypto
-    .createHash("sha256")
-    .update(resetToken)
-    .digest("hex");
+  this.passwordResetOTP = crypto.createHash("sha256").update(otp).digest("hex");
 
-  this.passwordResetExpires = Date.now() + 10 * 60 * 1000;
+  this.passwordResetExpires = Date.now() + 10 * 60 * 1000; // 10 mins
+  this.passwordResetAttempts = 0;
+  this.lastOTPSentAt = Date.now();
 
-  return resetToken;
+  return otp; // raw OTP (send via SMS)
 };
 
 export default mongoose.model("User", userSchema);

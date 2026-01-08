@@ -4,7 +4,8 @@ import User from "../models/Users.model.js";
 import AppError from "../utils/AppError.js";
 import { AuthError } from "../utils/AuthError.js";
 import { sendTokens, verifyRefreshToken } from "../utils/sendTokens.js";
-import { sendSMS } from "../utils/sms.js";
+import { sendOTP } from "../utils/sms/sendOTP.js";
+import { logAuthEvent } from "../utils/logAuthEvent.js";
 
 // SIGNUP
 export const signup = async (req, res, next) => {
@@ -155,17 +156,42 @@ export const refreshAccessToken = async (req, res, next) => {
 };
 
 // FORGOT PASSWORD
+
 export const forgotPassword = async (req, res, next) => {
   try {
-    const { mobileNumber } = req.body;
+    let { mobileNumber } = req.body;
+    if (mobileNumber !== undefined) {
+      mobileNumber = String(mobileNumber).trim();
+    }
+
+    if (!mobileNumber) {
+      return next(new AppError("mobileNumber required", 400));
+    }
     if (!mobileNumber) {
       return next(new AppError("mobileNumber required", 400));
     }
 
     const user = await User.findOne({ mobileNumber });
+    // Always same response → anti-enumeration
+    const genericResponse = {
+      status: "success",
+      message:
+        "If the mobile number is registered, a reset code has been sent.",
+    };
+    await logAuthEvent({
+      user,
+      mobileNumber,
+      action: "FORGOT_PASSWORD_REQUEST",
+      req,
+      success: true,
+    });
 
-    // Prevent user enumeration
     if (!user) {
+      return res.status(200).json(genericResponse);
+    }
+
+    // cooldown: 60 seconds
+    if (user.lastOTPSentAt && Date.now() - user.lastOTPSentAt < 60 * 1000) {
       return res.status(200).json({
         status: "success",
         message:
@@ -173,68 +199,127 @@ export const forgotPassword = async (req, res, next) => {
       });
     }
 
-    const resetToken = user.createPasswordResetToken();
+    const otp = user.createPasswordResetOTP();
+
     await user.save({ validateBeforeSave: false });
 
-    // Send SMS with reset token
-    const message = `Your password reset code is: ${resetToken}. It expires in 10 minutes. Use it to reset your password.`;
     try {
-      await sendSMS(user.mobileNumber, message);
-    } catch (smsError) {
-      // If SMS fails, still return success to prevent enumeration, but log error
-      console.error("SMS send failed:", smsError);
-      user.passwordResetToken = undefined;
-      user.passwordResetExpires = undefined;
-      await user.save({ validateBeforeSave: false });
-      return next(
-        new AppError("Failed to send reset code. Please try again.", 500)
-      );
+      console.log("sending otp");
+      await sendOTP({
+        phoneNumber: `+91${user.mobileNumber}`,
+        otp,
+      });
+      console.log("sent otp");
+    } catch {
+      // NEVER leak provider failure
     }
 
-    res.status(200).json({
-      status: "success",
-      message: "Reset code sent to your mobile number.",
+    await logAuthEvent({
+      user,
+      mobileNumber,
+      action: "FORGOT_PASSWORD_REQUEST",
+      req,
+      success: true,
     });
+
+    res.status(200).json(genericResponse);
   } catch (err) {
     next(err);
   }
 };
 
 // RESET PASSWORD
+
 export const resetPassword = async (req, res, next) => {
   try {
-    const { token } = req.params;
-    const { password } = req.body;
+    const { mobileNumber, otp, newPassword } = req.body;
 
-    if (!password) {
-      return next(new AppError("New password required", 400));
+    if (!mobileNumber || !otp || !newPassword) {
+      return next(new AppError("All fields required", 400));
     }
 
-    const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+    if (!/^\d{6}$/.test(otp)) {
+      await logAuthEvent({
+        user,
+        mobileNumber,
+        action: "RESET_PASSWORD_INVALID_OTP_FORMAT",
+        req,
+        success: false,
+      });
 
-    const user = await User.findOne({
-      passwordResetToken: hashedToken,
-      passwordResetExpires: { $gt: Date.now() },
-    });
-
-    if (!user) {
-      return next(new AppError("Invalid or expired token", 400));
+      return next(new AppError("Invalid OTP format", 400));
     }
 
-    user.password = password;
-    user.passwordResetToken = undefined;
+    const hashedOTP = crypto.createHash("sha256").update(otp).digest("hex");
+
+    const user = await User.findOne({ mobileNumber });
+
+    if (!user || !user.passwordResetOTP) {
+      await logAuthEvent({
+        user,
+        mobileNumber,
+        action: "RESET_PASSWORD_NO_ACTIVE_OTP",
+        req,
+        success: false,
+      });
+
+      return next(new AppError("Invalid or expired OTP", 400));
+    }
+
+    // Check expiry
+    if (user.passwordResetExpires < Date.now()) {
+      await logAuthEvent({
+        user,
+        mobileNumber,
+        action: "RESET_PASSWORD_TOO_MANY_ATTEMPTS",
+        req,
+        success: false,
+      });
+
+      return next(new AppError("Too many attempts. Request a new OTP.", 429));
+    }
+
+    // Count attempts BEFORE match
+    user.passwordResetAttempts += 1;
+
+    if (user.passwordResetAttempts > 5) {
+      await user.save({ validateBeforeSave: false });
+      return next(new AppError("Too many attempts. Request a new OTP.", 429));
+    }
+
+    if (user.passwordResetOTP !== hashedOTP) {
+      await user.save({ validateBeforeSave: false });
+
+      await logAuthEvent({
+        user,
+        mobileNumber,
+        action: "RESET_PASSWORD_INVALID_OTP",
+        req,
+        success: false,
+      });
+      return next(new AppError("Invalid or expired OTP", 400));
+    }
+
+    // OTP valid → reset password
+    user.password = newPassword;
+    user.passwordResetOTP = undefined;
     user.passwordResetExpires = undefined;
+    user.passwordResetAttempts = 0;
+    user.lastOTPSentAt = undefined;
 
-    await user.save(); // increments tokenVersion internally
+    await user.save();
 
-    const accessToken = user.signAccessToken();
-    const refreshToken = user.signRefreshToken();
-
-    sendTokens(res, accessToken, refreshToken);
+    await logAuthEvent({
+      user,
+      mobileNumber,
+      action: "RESET_PASSWORD_SUCCESS",
+      req,
+      success: true,
+    });
 
     res.status(200).json({
       status: "success",
-      message: "Password reset successful",
+      message: "Password reset successful. Please login again.",
     });
   } catch (err) {
     next(err);

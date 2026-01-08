@@ -10,15 +10,19 @@ import {
 } from "../controllers/auth.controller.js";
 import { protect, restrictTo } from "../middleware/auth.middleware.js";
 import { verifyUser } from "../controllers/auth.controller.js";
+import {
+  forgotPasswordLimiter,
+  resetPasswordLimiter,
+} from "../middleware/rateLimit.js";
 
 const router = express.Router();
 
 router.post("/register", signup);
 router.post("/login", login);
 router.post("/logout", protect, logout);
-router.post("/forgotPassword", forgotPassword);
-router.patch("/resetPassword/:token", resetPassword);
-router.patch("/changePassword", protect, changePassword);
+router.post("/forgotPassword", forgotPasswordLimiter, forgotPassword);
+router.post("/resetPassword", resetPasswordLimiter, resetPassword);
+router.post("/changePassword", protect, changePassword);
 
 router.get("/secure", protect, (req, res) =>
   res.send("Protected route accessed")
