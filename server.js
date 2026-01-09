@@ -6,7 +6,7 @@ import connectDB from "./config/db.js";
 
 connectDB();
 
-pp.get("/", (req, res) => {
+app.get("/", (req, res) => {
   res.send("Project Hub API is running! ");
 });
 
